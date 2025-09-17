@@ -29,6 +29,7 @@ public class GameManager : MonoBehaviour
     private int currentLevelIndex = 0;
     private bool isLevelComplete = false;
     private bool isAnimating = false;
+    public float tubeTopYOffset = 2.5f;
 
     [SerializeField] LevelManager levelManager;
     [SerializeField] UIManager uiManager;
@@ -40,6 +41,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] Transform parent;
 
     [SerializeField] AudioClip tubeCompleteSfx;
+
+
 
     private void Awake()
     {
@@ -117,29 +120,38 @@ public class GameManager : MonoBehaviour
         int ballsToMoveCount = Mathf.Min(heldBalls.Count, emptySlots);
         var ballsToMove = heldBalls.Take(ballsToMoveCount).ToList();
 
-        Sequence sequence = DOTween.Sequence();
-        List<Vector3> targetPositions = destinationTube.GetWorldPositionsForSlots(ballsToMove.Count);
+        Sequence mainSequence = DOTween.Sequence();
+        List<Vector3> finalPositions = destinationTube.GetWorldPositionsForSlots(ballsToMove.Count);
 
         for (int i = 0; i < ballsToMove.Count; i++)
         {
-            sequence.Append(ballsToMove[i].transform.DOMove(targetPositions[i], ballMoveDuration).SetEase(moveEase));
-            if (i < ballsToMove.Count - 1) sequence.AppendInterval(animationStaggerDelay);
+            var ball = ballsToMove[i];
+
+            Vector3 tubeTopPosition = destinationTube.transform.position + new Vector3(0, tubeTopYOffset, 0);
+
+            Sequence ballSequence = DOTween.Sequence();
+            ballSequence.Append(ball.transform.DOMove(tubeTopPosition, ballMoveDuration).SetEase(moveEase));
+            ballSequence.Append(ball.transform.DOMove(finalPositions[i], ballMoveDuration).SetEase(moveEase));
+
+            mainSequence.Insert(i * animationStaggerDelay, ballSequence);
         }
 
-        yield return sequence.WaitForCompletion();
+        yield return mainSequence.WaitForCompletion();
 
         destinationTube.AddBalls(ballsToMove);
 
         var ballsToReturn = heldBalls.Skip(ballsToMoveCount).ToList();
         if (ballsToReturn.Count > 0)
         {
-            selectedTube.ReturnBallsToTop(ballsToReturn);
+            StartCoroutine(AnimateAndReturnBalls());
         }
-
-        heldBalls.Clear();
-        selectedTube = null;
-        isAnimating = false;
-        CheckForWin();
+        else
+        {
+            heldBalls.Clear();
+            selectedTube = null;
+            isAnimating = false;
+            CheckForWin();
+        }
     }
 
     private IEnumerator AnimateAndReturnBalls()

@@ -48,7 +48,7 @@ public class LevelManager : MonoBehaviour
 
         if (levelIndex < 0 || levelIndex >= levels.Count)
         {
-            Debug.LogError("Invalid level index requested: " + levelIndex);
+            Debug.LogError("Invalid level : " + levelIndex);
             return;
         }
 
