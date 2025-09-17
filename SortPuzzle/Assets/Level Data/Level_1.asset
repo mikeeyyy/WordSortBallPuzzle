@@ -10,12 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d74c8c0ff7874ad478d564d0c403e015, type: 3}
-  m_Name: Level_00 3
+  m_Name: Level_1
   m_EditorClassIdentifier: 
   useGridLayout: 1
+  recommendTwoEmptyTubes: 0
   tubes:
-  - balls: 00000000000000000000000001000000
-  - balls: 02000000010000000100000000000000
-  - balls: 01000000020000000200000002000000
-  - balls: 
-  - balls: 
+  - balls: 000000000000000000000000
+  - balls: 00000000

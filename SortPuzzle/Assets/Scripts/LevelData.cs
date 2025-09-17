@@ -11,5 +11,6 @@ public class TubeData
 public class LevelData : ScriptableObject
 {
     public bool useGridLayout = true;
+    public bool recommendEmptyTubes;
     public TubeData[] tubes;
 }
