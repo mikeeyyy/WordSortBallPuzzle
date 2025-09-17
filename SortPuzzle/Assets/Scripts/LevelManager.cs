@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Linq;
+using DG.Tweening;
 using static Ball;
 
 [System.Serializable]
@@ -57,6 +58,7 @@ public class LevelManager : MonoBehaviour
         foreach (var tubeData in levelData.tubes)
         {
             GameObject tubeObj = Instantiate(tubePrefab, parent);
+            tubeObj.transform.DOScaleY(1f, 0.5f).SetEase(Ease.OutBounce);
             TubeController tubeController = tubeObj.GetComponent<TubeController>();
 
             if (tubeData.balls == null) continue;

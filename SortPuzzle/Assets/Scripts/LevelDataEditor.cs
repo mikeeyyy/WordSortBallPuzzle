@@ -1,18 +1,17 @@
-﻿using UnityEngine;
-using UnityEditor;
-using System.Collections.Generic;
-using System.Linq;
-using static Ball;
+﻿#if UNITY_EDITOR
 
-[CustomEditor(typeof(LevelData))]
-public class LevelDataEditor : Editor
+using System.Collections.Generic;
+using static Ball;
+[UnityEditor.CustomEditor(typeof(LevelData))]
+
+public class LevelDataEditor : UnityEditor.Editor
 {
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
 
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Level Validator", EditorStyles.boldLabel);
+        UnityEditor.EditorGUILayout.Space();
+        UnityEditor.EditorGUILayout.LabelField("Level Validator", UnityEditor.EditorStyles.boldLabel);
 
         LevelData levelData = (LevelData)target;
         const int TUBE_CAPACITY = 4;
@@ -21,9 +20,9 @@ public class LevelDataEditor : Editor
         
         if (!levelData.useGridLayout && levelData.tubes.Length > 4)
         {
-            EditorGUILayout.HelpBox(
+            UnityEditor.EditorGUILayout.HelpBox(
                 "Horizontal layout only supports a maximum of 4 tubes. This level has " + levelData.tubes.Length + ".",
-                MessageType.Error);
+                UnityEditor.MessageType.Error);
         }
 
         var ballCounts = new Dictionary<BallColor, int>();
@@ -43,18 +42,20 @@ public class LevelDataEditor : Editor
             }
         }
 
-        EditorGUILayout.LabelField("Ball Counts:");
+        UnityEditor.EditorGUILayout.LabelField("Ball Counts:");
         foreach (var pair in ballCounts)
         {
             if (pair.Value != TUBE_CAPACITY)
             {
-                EditorGUILayout.HelpBox($"{pair.Key}: {pair.Value} (Warning: Should be {TUBE_CAPACITY}!!!!!!!!)", MessageType.Warning);
+                UnityEditor.EditorGUILayout.HelpBox($"{pair.Key}: {pair.Value} (Warning: Should be {TUBE_CAPACITY}!!!!!!!!)", UnityEditor.MessageType.Warning);
             }
         }
 
         if (emptyTubes < 2)
         {
-            EditorGUILayout.HelpBox($"Only {emptyTubes} empty tubes. (Warning: At least 2 are recommended!!!!!!!!)", MessageType.Warning);
+            UnityEditor.EditorGUILayout.HelpBox($"Only {emptyTubes} empty tubes. (Warning: At least 2 are recommended!!!!!!!!)", UnityEditor.MessageType.Warning);
         }
     }
+
 }
+#endif

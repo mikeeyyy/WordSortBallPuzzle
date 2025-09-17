@@ -64,7 +64,7 @@ RectTransform:
   m_GameObject: {fileID: 8019246122971150065}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1, y: 0, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7227337852719483094}
@@ -73,7 +73,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: -411, y: -364}
-  m_SizeDelta: {x: 206.85, y: 750.811}
+  m_SizeDelta: {x: 230, y: 768}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2753445103473107378
 CanvasRenderer:
@@ -174,3 +174,5 @@ MonoBehaviour:
   ballSpacing: 130
   ballContainer: {fileID: 7227337852719483094}
   tubeButton: {fileID: 323161911512541959}
+  tubeSfx: {fileID: 8300000, guid: 03519ff863d44fc47ac41f986329c04d, type: 3}
+  ballPlaceSfx: {fileID: 8300000, guid: 93e215c967cf952499861d61305e733d, type: 3}
