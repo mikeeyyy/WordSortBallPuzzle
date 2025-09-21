@@ -7,6 +7,8 @@ using DG.Tweening;
 
 public class GameManager : MonoBehaviour
 {
+    private enum GameState { Loading, Playing, Animating, LevelComplete }
+    private GameState _currentState;
     public static GameManager Instance { get; private set; }
 
     [Header("Animation Settings")]
@@ -22,42 +24,52 @@ public class GameManager : MonoBehaviour
 
     [Header("Scene References")]
     [SerializeField] Transform animationParent;
-
+    [SerializeField] LevelManager levelManager;
+    [SerializeField] UIManager uiManager;
+ 
+    private List<Tween> activeHoverTweens = new List<Tween>();
+    private List<TubeController> activeTubes = new List<TubeController>();
     private TubeController selectedTube;
     private List<BallController> heldBalls = new List<BallController>();
 
     private int currentLevelIndex = 0;
-    private bool isLevelComplete = false;
-    private bool isAnimating = false;
     public float tubeTopYOffset = 2.5f;
-
-    [SerializeField] LevelManager levelManager;
-    [SerializeField] UIManager uiManager;
-    private List<Tween> activeHoverTweens = new List<Tween>();
-
-    [Header("Pfx Reference")]
-    [SerializeField] Camera uiCamera;
-    [SerializeField] GameObject particlePrefab;
-    [SerializeField] Transform parent;
-
-    [SerializeField] AudioClip tubeCompleteSfx;
 
 
 
     private void Awake()
     {
-        if (Instance != null && Instance != this) Destroy(gameObject);
-        else Instance = this;
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+        }
+        else
+        {
+            Instance = this;
+            GameEvents.OnTubeSelected += HandleTubeSelection;
+            GameEvents.OnReloadLevel += ReloadLevel;
+            GameEvents.OnLoadNextLevel += LoadNextLevel;
+        }
     }
-
+    private void OnDestroy()
+    {
+        GameEvents.OnTubeSelected -= HandleTubeSelection;
+        GameEvents.OnReloadLevel -= ReloadLevel;
+        GameEvents.OnLoadNextLevel -= LoadNextLevel;
+    }
     void Start()
     {
         LoadLevel(currentLevelIndex);
     }
 
-    public void OnTubeSelected(TubeController tube)
+    public void RegisterTube(TubeController tube)
     {
-        if (isLevelComplete || isAnimating) return;
+        if (!activeTubes.Contains(tube)) activeTubes.Add(tube);
+    }
+
+    public void HandleTubeSelection(TubeController tube)
+    {
+        if (_currentState != GameState.Playing) return;
 
         if (selectedTube == null)
         {
@@ -65,14 +77,14 @@ public class GameManager : MonoBehaviour
             {
                 selectedTube = tube;
                 heldBallPosition.position = tube.transform.position + new Vector3(0, heldBallYOffset, 0);
-                StartCoroutine(AnimateAndRemoveBallsFromTube());
+                AnimateAndRemoveBallsFromTube();
             }
         }
         else
         {
             if (tube == selectedTube)
             {
-                StartCoroutine(AnimateAndReturnBalls());
+                AnimateAndReturnBalls();
             }
             else
             {
@@ -80,49 +92,52 @@ public class GameManager : MonoBehaviour
                 bool canPlace = tube.IsEmpty() || tube.GetTopBallColor() == heldBalls[0].color;
                 if (emptySlots > 0 && canPlace)
                 {
-                    StartCoroutine(AnimateAndPlaceBallsInTube(tube, emptySlots));
+                    AnimateAndPlaceBallsInTube(tube, emptySlots);
                 }
                 else
                 {
-                    StartCoroutine(AnimateAndReturnBalls());
+                    AnimateAndReturnBalls();
                 }
             }
         }
     }
 
-    private IEnumerator AnimateAndRemoveBallsFromTube()
+    private void AnimateAndRemoveBallsFromTube()
     {
-        isAnimating = true;
-
-        heldBalls = selectedTube.RemoveTopBalls(selectedTube.GetTopBallBlock().Count);
+        _currentState = GameState.Animating;
+        heldBalls = selectedTube.RemoveTopBalls();
 
         Sequence sequence = DOTween.Sequence();
-        for (int i = 0; i < heldBalls.Count; i++)
+        for (int i = heldBalls.Count - 1; i >= 0; i--)
         {
             var ball = heldBalls[i];
             ball.transform.SetParent(animationParent, true);
             Vector3 targetPos = heldBallPosition.position + new Vector3(0, i * (ball.GetComponent<RectTransform>().rect.height * 0.8f), 0);
-            sequence.Append(ball.transform.DOMove(targetPos, ballMoveDuration).SetEase(moveEase));
-            if (i < heldBalls.Count - 1) sequence.AppendInterval(animationStaggerDelay);
+
+            int animationDelayIndex = (heldBalls.Count - 1) - i;
+            sequence.Insert(animationDelayIndex * animationStaggerDelay, ball.transform.DOMove(targetPos, ballMoveDuration).SetEase(moveEase));
         }
-
-        yield return sequence.WaitForCompletion();
-
-        isAnimating = false;
-        StartHoveringEffect();
+        sequence.OnComplete(() =>
+        {
+            _currentState = GameState.Playing;
+            StartHoveringEffect();
+        });
     }
 
-    private IEnumerator AnimateAndPlaceBallsInTube(TubeController destinationTube, int emptySlots)
+    private void  AnimateAndPlaceBallsInTube(TubeController destinationTube, int emptySlots)
     {
+        _currentState = GameState.Animating;
         StopHoveringEffect();
-        isAnimating = true;
 
         int ballsToMoveCount = Mathf.Min(heldBalls.Count, emptySlots);
         var ballsToMove = heldBalls.Take(ballsToMoveCount).ToList();
+        var ballsToReturn = heldBalls.Skip(ballsToMoveCount).ToList();
 
         Sequence mainSequence = DOTween.Sequence();
         List<Vector3> finalPositions = destinationTube.GetWorldPositionsForSlots(ballsToMove.Count);
 
+      
+        
         for (int i = 0; i < ballsToMove.Count; i++)
         {
             var ball = ballsToMove[i];
@@ -132,50 +147,67 @@ public class GameManager : MonoBehaviour
             Sequence ballSequence = DOTween.Sequence();
             ballSequence.Append(ball.transform.DOMove(tubeTopPosition, ballMoveDuration).SetEase(moveEase));
             ballSequence.Append(ball.transform.DOMove(finalPositions[i], ballMoveDuration).SetEase(moveEase));
-
             mainSequence.Insert(i * animationStaggerDelay, ballSequence);
         }
 
-        yield return mainSequence.WaitForCompletion();
-
-        destinationTube.AddBalls(ballsToMove);
-
-        var ballsToReturn = heldBalls.Skip(ballsToMoveCount).ToList();
         if (ballsToReturn.Count > 0)
         {
-            StartCoroutine(AnimateAndReturnBalls());
+            List<Vector3> targetPositions = selectedTube.GetWorldPositionsForSlots(ballsToReturn.Count);
+            for (int i = 0; i < ballsToReturn.Count; i++)
+            {
+                mainSequence.Insert(i * animationStaggerDelay, ballsToReturn[i].transform.DOMove(targetPositions[i], ballMoveDuration).SetEase(moveEase));
+            }
         }
-        else
-        {
-            heldBalls.Clear();
-            selectedTube = null;
-            isAnimating = false;
-            CheckForWin();
-        }
-    }
 
-    private IEnumerator AnimateAndReturnBalls()
+        mainSequence.OnComplete(() =>
+        {
+            destinationTube.AddBalls(ballsToMove);
+            if (ballsToReturn.Count > 0)
+            {
+                selectedTube.AddBalls(ballsToReturn);
+            }
+
+            ResetSelection();
+            CheckForWin();
+        });
+    }
+    
+    private void AnimateAndReturnBalls()
     {
+        _currentState = GameState.Animating;
         StopHoveringEffect();
-        isAnimating = true;
 
         Sequence sequence = DOTween.Sequence();
         List<Vector3> targetPositions = selectedTube.GetWorldPositionsForSlots(heldBalls.Count);
 
-        for (int i = 0; i < heldBalls.Count; i++)
+        for (int i = heldBalls.Count - 1; i >= 0; i--)
         {
-            sequence.Append(heldBalls[i].transform.DOMove(targetPositions[i], ballMoveDuration).SetEase(moveEase));
-            if (i < heldBalls.Count - 1) sequence.AppendInterval(animationStaggerDelay);
+            sequence.Insert(i * animationStaggerDelay, heldBalls[i].transform.DOMove(targetPositions[i], ballMoveDuration).SetEase(moveEase));
+        }
+        sequence.OnComplete(() =>
+        {
+            selectedTube.AddBalls(heldBalls);
+            ResetSelection();
+        });
+    }
+    void CheckForWin()
+    {
+        bool allTubesSolved = true;
+        foreach (var tube in activeTubes)
+        {
+            tube.UpdateTubeState();
+            if (!tube.IsSolved())
+            {
+                allTubesSolved = false;
+            }
         }
 
-        yield return sequence.WaitForCompletion();
-
-        selectedTube.ReturnBallsToTop(heldBalls);
-        heldBalls.Clear();
-        selectedTube = null;
-        isAnimating = false;
+        if (allTubesSolved)
+        {
+            _currentState = GameState.LevelComplete;
+            GameEvents.OnLevelComplete?.Invoke();
+        }
     }
-
     private void StartHoveringEffect()
     {
         foreach (var ball in heldBalls)
@@ -196,73 +228,30 @@ public class GameManager : MonoBehaviour
         }
         activeHoverTweens.Clear();
     }
-    public void PlayEffectOnButton(RectTransform TubeRect)
+    private void ResetSelection()
     {
-        Vector3 screenPos = RectTransformUtility.WorldToScreenPoint(null, TubeRect.position);
-
-        Vector3 worldPos;
-        RectTransformUtility.ScreenPointToWorldPointInRectangle(
-            TubeRect, screenPos, uiCamera, out worldPos
-        );
-
-        Quaternion rot = Quaternion.Euler(new Vector3(-90,0,0));
-
-        GameObject effect = Instantiate(particlePrefab, worldPos, rot);
-        effect.transform.localScale = new Vector3(0.3f,0.3f,0.3f);
-
-        ParticleSystem ps = effect.GetComponent<ParticleSystem>();
-        if (ps != null)
-        {
-            Destroy(effect, ps.main.duration + ps.main.startLifetime.constantMax);
-        }
-        else
-        {
-            Destroy(effect, 2f);
-        }
+        heldBalls.Clear();
+        selectedTube = null;
+        _currentState = GameState.Playing;
     }
 
-    void CheckForWin()
+    private void ClearLevel()
     {
-        var allTubes = FindObjectsOfType<TubeController>();
-
-        foreach (var tube in allTubes)
-        {
-            tube.SetInteractable(!tube.IsCompleteAndFull());
-            if (tube.IsCompleteAndFull())
-            {
-                if(tube.GetIslocked()==true)
-                {
-                    PlayEffectOnButton(tube.GetComponent<RectTransform>());
-                    tube.SetIslocked(false);
-                    AudioManager.Instance.PlaySfxOnShot(tubeCompleteSfx);
-                }
-            }
-        }
-        if (allTubes.All(tube => tube.IsSolved()))
-        {
-            isLevelComplete = true;
-            if (uiManager != null) uiManager.ShowNextLevelPanel("Victory");
-        }
+        DOTween.KillAll();
+        activeTubes.Clear();
+        StopHoveringEffect();
+        heldBalls.ForEach(ball => ball.gameObject.SetActive(false));
+        ResetSelection();
     }
-
     void LoadLevel(int index)
     {
-        StopHoveringEffect();
-        if (heldBalls.Count > 0)
-        {
-            foreach (var ball in heldBalls)
-            {
-                if (ball != null) Destroy(ball.gameObject);
-            }
-            heldBalls.Clear();
-        }
-        selectedTube = null;
-        isAnimating = false;
-
+        _currentState = GameState.Loading;
+        ClearLevel();
         currentLevelIndex = index;
-        levelManager.LoadLevel(currentLevelIndex);
-        uiManager.UpdateLevelText(currentLevelIndex + 1);
-        isLevelComplete = false;
+
+        GameEvents.OnLoadLevel?.Invoke(currentLevelIndex);
+
+        _currentState = GameState.Playing;
         CheckForWin();
     }
 

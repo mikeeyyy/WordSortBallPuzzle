@@ -8,40 +8,56 @@ public class UIManager : MonoBehaviour
     [Header("References")]
     [SerializeField] TextMeshProUGUI levelText;
     [SerializeField] Button restartButton;
-    [SerializeField] Button SettingButton;
+    [SerializeField] Button settingButton;
     [SerializeField] Button nextLevelButton;
     [SerializeField] Button closeButton;
     [SerializeField] GameObject nextLevelPanel;
     [SerializeField] TMP_Text SettingPaneltext;
 
 
+    private void Awake()
+    {
+        GameEvents.OnLoadLevel += UpdateLevelText;
+        GameEvents.OnLevelComplete += ShowVictoryPanel;
+
+        restartButton.onClick.AddListener(() => GameEvents.OnReloadLevel?.Invoke());
+        nextLevelButton.onClick.AddListener(() =>
+        {
+            HidePanel();
+            GameEvents.OnLoadNextLevel?.Invoke();
+        });
+        settingButton.onClick.AddListener(() => ShowPanel("Options"));
+        closeButton.onClick.AddListener(HidePanel);
+    }
+    private void OnDestroy()
+    {
+        GameEvents.OnLoadLevel -= UpdateLevelText;
+        GameEvents.OnLevelComplete -= ShowVictoryPanel;
+    }
     void Start()
     {
-        HideNextLevelPanel();
-        nextLevelButton.onClick.AddListener(()=>
-        {
-            HideNextLevelPanel();
-            GameManager.Instance.LoadNextLevel();
-        });
-        restartButton.onClick.AddListener(GameManager.Instance.ReloadLevel);
-        SettingButton.onClick.AddListener(()=>ShowNextLevelPanel("Option"));
-        closeButton.onClick.AddListener(HideNextLevelPanel);
+        HidePanel();
     }
 
     public void UpdateLevelText(int level)
     {
-        levelText.text = "Level " + level;
+        levelText.text = "Level " + (level + 1);
     }
-    void HideNextLevelPanel()
+
+    private void ShowVictoryPanel()
+    {
+        ShowPanel("Victory!");
+    }
+    private void ShowPanel(string title)
+    {
+        SettingPaneltext.text = title;
+        nextLevelPanel.SetActive(true);
+        nextLevelButton.gameObject.SetActive(true);
+        nextLevelButton.transform.DOPunchScale(Vector3.one * 0.1f, 0.5f, 10, 1);
+    }
+    private void HidePanel()
     {
         nextLevelButton.gameObject.SetActive(false);
         nextLevelPanel.SetActive(false);
-    }    
-    public void ShowNextLevelPanel(String text)
-    {
-        SettingPaneltext.text = text;
-        nextLevelPanel.SetActive(true);
-        nextLevelButton.transform.DOPunchScale(Vector3.one, .5f, 10, 1);
-        nextLevelButton.gameObject.SetActive(true);
     }
 }

@@ -17,10 +17,6 @@ public class LevelManager : MonoBehaviour
     [Header("Level Data")]
     [SerializeField] List<LevelData> levels;
 
-    [Header("Prefabs")]
-    [SerializeField] GameObject tubePrefab;
-    [SerializeField] GameObject ballPrefab;
-
     [Header("Sprite Mappings")]
     [SerializeField] List<BallSpriteMapping> ballSpriteMappings;
 
@@ -33,18 +29,15 @@ public class LevelManager : MonoBehaviour
     void Awake()
     {
         spriteMap = ballSpriteMappings.ToDictionary(mapping => mapping.color, mapping => mapping.sprite);
+        GameEvents.OnLoadLevel += LoadLevel;
     }
-
+    private void OnDestroy()
+    {
+        GameEvents.OnLoadLevel -= LoadLevel;
+    }
     public void LoadLevel(int levelIndex)
     {
-        foreach (Transform child in tubeHorizontalParent)
-        {
-            Destroy(child.gameObject);
-        }
-        foreach (Transform child in tubeGridParent)
-        {
-            Destroy(child.gameObject);
-        }
+        ClearExistingLevel();
 
         if (levelIndex < 0 || levelIndex >= levels.Count)
         {
@@ -57,26 +50,36 @@ public class LevelManager : MonoBehaviour
 
         foreach (var tubeData in levelData.tubes)
         {
-            GameObject tubeObj = Instantiate(tubePrefab, parent);
-            tubeObj.transform.DOScaleY(1f, 0.5f).SetEase(Ease.OutBounce);
+            GameObject tubeObj = ObjectPooler.Instance.SpawnFromPool("Tube", parent);
             TubeController tubeController = tubeObj.GetComponent<TubeController>();
+            GameManager.Instance.RegisterTube(tubeController);
 
-            if (tubeData.balls == null) continue;
-
+            var ballsToCreate = new List<BallController>();
             foreach (var ballColor in tubeData.balls)
             {
-                GameObject ballObj = Instantiate(ballPrefab);
+                GameObject ballObj = ObjectPooler.Instance.SpawnFromPool("Ball", null);
                 BallController ballController = ballObj.GetComponent<BallController>();
 
                 ballController.color = ballColor;
-
                 ballController.SetSprite(spriteMap[ballColor]);
-
-                tubeController.AddBallForLevelSetup(ballController);
+                ballsToCreate.Add(ballController);
             }
+            tubeController.AddBalls(ballsToCreate);
         }
     }
-    Transform GetParent(LevelData levelData)
+    private void ClearExistingLevel()
+    {
+        List<TubeController> activeTubes = new List<TubeController>();
+        activeTubes.AddRange(tubeHorizontalParent.GetComponentsInChildren<TubeController>());
+        activeTubes.AddRange(tubeGridParent.GetComponentsInChildren<TubeController>());
+
+        foreach (var tube in activeTubes)
+        {
+            tube.ClearBalls();
+            ObjectPooler.Instance.ReturnToPool("Tube", tube.gameObject);
+        }
+    }
+    private Transform GetParent(LevelData levelData)
     {
         GridLayoutGroup gridLayout = tubeGridParent.GetComponent<GridLayoutGroup>();
         HorizontalLayoutGroup horizontalLayout = tubeHorizontalParent.GetComponent<HorizontalLayoutGroup>();
